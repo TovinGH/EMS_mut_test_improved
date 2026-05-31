@@ -1,0 +1,122 @@
+---
+title: "EMS_MUT_TEST"
+output: html_document
+<!-- --- -->
+
+```{r}
+library(Biostrings)
+library(stringi)
+library(stringr)
+#currently set up to read genome of common bean
+chrom_vector<-readLines("PvulgarisLaborOvalle_670_v1.0.fa")
+
+#remove lines that are headers for fasta files by eliminating lines with ">"
+chrom_vector<- grep(">", chrom_vector, value = TRUE, invert = TRUE)
+chrom_vector<-paste0(chrom_vector, collapse = "")
+chrom_vector<-DNAString(chrom_vector)
+A_positions<-matchPattern("A", chrom_vector, max.mismatch=0, min.mismatch=0, with.indels=FALSE, fixed=TRUE, algorithm="auto")
+#collapse position object to just one number for each position
+A_positions<-start(A_positions)
+G_positions<-matchPattern("G", chrom_vector, max.mismatch=0, min.mismatch=0, with.indels=FALSE, fixed=TRUE, algorithm="auto")
+#collapse position object to just one number for each position
+G_positions<-start(G_positions)
+
+
+#set average number of A to T SNPs. distribution is assumed to be normal
+A_to_T_AVG<- 50
+#also set Standard deviation
+A_to_T_SD<-10
+A_to_T_amount<-round(rnorm(1, mean = A_to_T_AVG, sd = A_to_T_SD))
+#choose locations for A to T SNPs
+A_to_T_locations<-sample(A_positions, size=A_to_T_amount, replace=FALSE)
+#now replace the letters at these locations
+chrom_vector<-replaceLetterAt(chrom_vector, at = A_to_T_locations, letter=rep("T", times=A_to_T_amount), verbose = TRUE)
+
+#set average number of G to C SNPs. distribution is assumed to be normal
+G_to_C_AVG<- 50
+#also set Standard deviation
+G_to_C_SD<-10
+G_to_C_amount<-round(rnorm(1, mean = G_to_C_AVG, sd = G_to_C_SD))
+#choose locations for A to T SNPs
+G_to_C_locations<-sample(G_positions, size=G_to_C_amount, replace=FALSE)
+#now replace the letters at these locations
+chrom_vector<-replaceLetterAt(chrom_vector, at = G_to_C_locations, letter=rep("C", times=G_to_C_amount), verbose = TRUE)
+
+#set average and standard deviation of number of deletions
+num_deletion_AVG<-20
+num_deletion_SD<-5
+#now select length from normal distribution
+deletions_amount<-round(rnorm(1, mean = num_deletion_AVG, sd = num_deletion_SD))
+
+#set AVG and SD for deletion length as well
+len_deletion_AVG<-20
+len_deletion_SD<-5
+
+#set deletion locations (currently can fail if end of chromosome is chosen and deletion length is too long)
+#code will try to delete something that doesnt exist
+#this failure is very unlikely in realistic simulations
+chrom_len<-nchar(chrom_vector)
+del_locations<-sample(1:chrom_len, size = deletions_amount)
+del_locations<-sort(del_locations, decreasing = TRUE)
+
+# Generate all random lengths
+all_lens <- round(rnorm(deletions_amount, mean = len_deletion_AVG, sd = len_deletion_SD))
+
+# Create a vector of ranges to delete
+del_ranges <- IRanges(start = del_locations, end = del_locations + all_lens)
+#replace all regions with null
+chrom_vector <- replaceAt(chrom_vector, at = del_ranges, value = "")
+
+#set average and standard deviation of number of insertions
+num_insertion_AVG<-20
+num_insertion_SD<-5
+#now select length from normal distribution
+insertions_amount<-round(rnorm(1, mean = num_insertion_AVG, sd = num_insertion_SD))
+
+#set AVG and SD for insertion length as well
+len_insertion_AVG<-20
+len_insertion_SD<-5
+
+#set insertion locations
+insert_locations<-sample(1:chrom_len, size = insertions_amount)
+insert_locations<-sort(insert_locations, decreasing = TRUE)
+#create vector to sample from to create sequence for insertions
+nucleotides<-c("A", "T", "G", "C")
+for (i in 1:insertions_amount) {
+  latest_insertion_size<-round(rnorm(1, mean = len_insertion_AVG, sd = len_insertion_SD))
+  latest_insertion<-DNAString(paste0(sample(nucleotides, size=latest_insertion_size, replace = TRUE), collapse = ""))
+  chrom_vector<-replaceAt(chrom_vector, at = insert_locations[i], value=latest_insertion)
+}
+
+#set average and standard deviation for number of inversion mutations
+num_invert_AVG<-50
+num_invert_SD<-5
+#select inversion quantity from normal distribution
+inversions_amount<-round(rnorm(1, mean = num_invert_AVG, sd = num_invert_SD))
+#create vector of locations for inversions
+invert_locations<-sample(1:chrom_len, size = inversions_amount)
+invert_locations<-sort(invert_locations, decreasing = TRUE)
+#set AVG and SD for inversion length
+inversion_len_AVG<-10
+inversion_len_SD<-1
+
+# Generate all random lengths
+all_Invert_lens <- round(rnorm(inversions_amount, mean = inversion_len_AVG, sd = inversion_len_SD))
+
+# Create a vector of ranges to extract
+inv_ranges <- IRanges(start = invert_locations, end = invert_locations + all_Invert_lens)
+
+#extract and invert sequences
+sequences_for_inversion<-extractAt(chrom_vector, at = inv_ranges)
+inverted_sequences<-reverse(sequences_for_inversion)
+
+#replace the original sections with their inverted counterpart
+chrom_vector<-replaceAt(chrom_vector, at=inv_ranges, value=inverted_sequences)
+#now extract and clean and reformat desired sequence(BAR gene is example here)
+gene_vector<-readLines("BAR_gene.txt")
+#remove lines that are headers for fasta files by eliminating lines with ">"
+gene_vector<- grep(">", gene_vector, value = TRUE, invert = TRUE)
+ gene_vector<-DNAString(paste0(gene_vector, collapse = ""))
+ matchPattern(gene_vector, chrom_vector, max.mismatch=0, min.mismatch=0, with.indels=FALSE, fixed=TRUE, algorithm="auto")
+
+```
